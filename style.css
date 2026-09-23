@@ -9,3 +9,29 @@
 /* Optional account and cloud-sync layer */
 .account-button{position:fixed;z-index:9;right:32px;top:25px;border:1px solid #b9c8c4;background:var(--paper);color:#365b62;border-radius:999px;padding:7px 15px;font-size:12px;letter-spacing:.06em;box-shadow:0 5px 18px #294b5f10}.account-button:hover{background:#edf2ee}.account-button.is-synced{background:#e5eee9;border-color:#a9c2b5;color:#315e4c}.account-button[data-state="busy"]:after{content:"";display:inline-block;width:6px;height:6px;margin-left:7px;border-radius:50%;background:var(--gold)}.account-dialog{position:relative;width:min(460px,calc(100vw - 32px));border:1px solid var(--line);border-radius:9px;padding:42px;background:var(--paper);color:var(--ink);box-shadow:0 28px 90px #17323835}.account-dialog::backdrop{background:#1d3538a8;backdrop-filter:blur(4px)}.dialog-close{position:absolute;right:16px;top:12px;border:0;background:transparent;color:#71817f;font-size:25px}.account-dialog h2{font-size:27px;margin:10px 0}.account-dialog p{font-size:14px;line-height:1.9}.account-dialog form{display:grid;gap:12px;margin-top:25px}.account-dialog form label{margin:0}.account-dialog input[type="email"]{width:100%;border:1px solid var(--line);border-radius:5px;padding:12px 13px;background:#fff;color:var(--ink);font-size:16px}.account-dialog form .primary{width:100%;margin-top:5px}.auth-note,.setup-hint{font-size:12px!important}.setup-hint{padding:11px 13px;background:var(--warm);border-left:2px solid var(--gold);color:#755f43!important}.account-status{display:grid;gap:4px;background:#e9efeb;border-radius:5px;padding:16px;margin:20px 0}.account-status span{font-size:14px;color:#406759}.account-status small{font-size:12px;color:#74877e}.text-danger{display:block;border:0;background:transparent;color:#8b6965;padding:11px 0;margin-top:11px}.account-dialog .secondary{width:100%}
 @media(max-width:640px){.account-button{right:13px;top:12px;padding:6px 10px;font-size:11px}.account-dialog{padding:34px 22px}header #today{padding-right:98px}.focus-mode .account-button{display:none}}
+
+/* Login dialog layout correction: isolate it from the generic dialog>div rule. */
+.account-dialog{width:min(520px,calc(100vw - 32px));padding:44px 46px 38px;border-radius:12px}
+.account-dialog>#signedOutPanel,.account-dialog>#signedInPanel{display:block;width:100%}
+.account-dialog h2{font-size:29px;line-height:1.45;margin:10px 0 12px}
+.account-dialog p{line-height:1.9;overflow-wrap:anywhere}
+.account-dialog form{display:grid;grid-template-columns:minmax(0,1fr);gap:11px;width:100%;margin-top:27px}
+.account-dialog form label{display:block;width:100%;margin:0 0 2px}
+.account-dialog input[type=email]{display:block;width:100%;min-width:0;min-height:52px;padding:13px 15px;font-size:16px}
+.account-dialog form .primary{display:block;width:100%;min-height:50px;margin-top:6px}
+@media(max-width:640px){.account-dialog{width:calc(100vw - 24px);padding:38px 24px 30px}.account-dialog h2{font-size:25px}.account-dialog input[type=email]{min-height:50px}}
+
+/* Header account action: participates in layout instead of covering the date. */
+.header-actions{display:flex;align-items:center;justify-content:flex-end;gap:16px;min-width:0;margin-left:auto}
+.header-actions #today{display:block;white-space:nowrap}
+.header-actions .account-button{position:static;inset:auto;flex:0 0 auto;white-space:nowrap;margin:0;padding:7px 15px}
+@media(max-width:640px){
+  header{height:auto;min-height:53px;padding:7px 0}
+  .header-actions{width:100%;gap:10px;flex-wrap:wrap}
+  .header-actions #today{padding-right:0}
+  .header-actions .account-button{padding:6px 10px}
+}
+@media(max-width:360px){
+  .header-actions{justify-content:space-between}
+  .header-actions #today{font-size:10px;letter-spacing:.04em}
+}

@@ -46,6 +46,16 @@
   const signedOut = $("#signedOutPanel");
   const signedIn = $("#signedInPanel");
 
+  // Keep the date and account action in normal document flow so they never overlap.
+  const pageHeader = document.querySelector("main > header");
+  const today = $("#today");
+  if (pageHeader && today) {
+    const headerActions = document.createElement("div");
+    headerActions.className = "header-actions";
+    headerActions.append(today, accountButton);
+    pageHeader.append(headerActions);
+  }
+
   function setSignedOut() {
     session = null;
     signedOut.hidden = false;
