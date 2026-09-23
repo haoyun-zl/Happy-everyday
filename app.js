@@ -40,3 +40,31 @@ window.addEventListener('pagehide',()=>{stopSound();stopBreath();stopMove()});sh
 // Writing mode changes only the presentation. Diary storage and records are unchanged.
 const focusToggle=document.querySelector('#focusToggle');
 focusToggle.addEventListener('click',()=>{const active=document.body.classList.toggle('focus-mode');focusToggle.setAttribute('aria-pressed',String(active));focusToggle.textContent=active?'退出专注书写':'进入专注书写';if(active)document.querySelector('#note').focus()});
+
+// Optional cloud-sync layer. Local journaling remains available when the
+// service is not configured or the network is temporarily unavailable.
+window.xinqingApp={
+  getEntries:()=>entries.map(entry=>({...entry})),
+  replaceEntries:next=>{
+    localStorage.setItem(KEY,JSON.stringify(next));
+    entries=next;
+    render();
+  },
+  isValidEntry:valid,
+  notify:toast
+};
+const localPersist=persist;
+persist=function(next){
+  const previous=entries.map(entry=>entry.id);
+  const saved=localPersist(next);
+  if(saved) window.dispatchEvent(new CustomEvent('xinqing:local-change',{detail:{previous,next}}));
+  return saved;
+};
+const cloudConfig=document.createElement('script');
+cloudConfig.src='config.js';
+cloudConfig.onload=()=>{
+  const cloudClient=document.createElement('script');
+  cloudClient.src='cloud-sync.js';
+  document.body.appendChild(cloudClient);
+};
+document.body.appendChild(cloudConfig);
