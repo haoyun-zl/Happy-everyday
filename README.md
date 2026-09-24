@@ -1,4 +1,78 @@
-# 心晴 · 产品体验迭代版
+# 心晴 · 情绪日记与自我关怀
+
+一个中文情绪日记网页，帮助用户记录心情、回看变化，并选择轻量自我关怀活动。采用静谧浅色界面，适配电脑与手机。
+
+[访问心晴](https://haoyun-zl.github.io/Happy-everyday/)
+
+当前为个人试用原型，支持游客本地保存及可选的 Supabase 邮箱登录与云同步。请阅读下方数据限制后再邀请外部用户。
+
+## 功能与技术
+
+| 模块 | 功能 |
+| --- | --- |
+| 日记 | 五档心情、1–10 情绪强度、记录时间、多选标签、最多 3000 字文字 |
+| 草稿 | 浏览器本机保存及刷新恢复，不上传草稿 |
+| 历史 | 编辑、删除确认、按心情筛选、关键词搜索 |
+| 备份 | JSON 导出与导入，按记录 ID 去重 |
+| 洞察 | 7/30/90 天趋势、记录数、记录天数、均值及标签频次 |
+| 关怀 | 一分钟呼吸、七种合成音景、五分钟轻活动 |
+| 账号 | 邮箱 Magic Link 登录、同步状态、手动同步 |
+
+使用 HTML、CSS、原生 JavaScript、localStorage、Web Audio API，无需 npm 构建。GitHub Pages 托管静态文件；Supabase 提供认证与数据库，SDK v2 从 jsDelivr 加载。关怀建议是规则匹配，未接入大语言模型，不提供心理诊断或治疗。
+
+## 根目录文件
+
+| 文件 | 用途 |
+| --- | --- |
+| index.html | 网页入口，必须位于 Pages 发布目录根部 |
+| style.css | 视觉与响应式布局 |
+| app.js | 日记、草稿、搜索、统计及自助练习 |
+| config.js | Supabase URL 与公开客户端密钥 |
+| cloud-sync.js | 邮箱登录与云同步 |
+| supabase-schema.sql | 首次配置数据库表和 RLS 策略 |
+| README.md | 项目说明与部署指南 |
+
+## 本地运行
+
+在文件所在目录执行 `python3 -m http.server 8080`，打开 http://localhost:8080/ 。Windows 可使用 `python -m http.server 8080`。建议通过 HTTP 测试，线上使用 HTTPS，不要双击 HTML 测试登录。
+
+## Supabase 首次配置
+
+1. 创建项目，在 SQL Editor 中运行 supabase-schema.sql。已正确配置的项目不必因本次前端更新重复执行 SQL。
+2. 在 config.js 中填写 `window.XINQING_CLOUD_CONFIG` 的 `supabaseUrl` 与 `supabaseAnonKey`。后者可填写 publishable key 或旧版 anon key。禁止填写 service_role、secret key、数据库密码或 SMTP 密码。
+3. Authentication 中启用 Email 登录；如允许新用户注册，确认注册未被关闭。
+4. Authentication → URL Configuration 中，将 Site URL 及 Redirect URLs 设置为实际网页地址。本项目示例为 `https://haoyun-zl.github.io/Happy-everyday/`，本地测试另加入 `http://localhost:8080/`。
+5. 面向普通用户发送邮件，需要配置自定义 SMTP。默认邮件服务仅允许向项目团队邮箱发送，且发送额度较低。配置公开密钥不等于完成邮件服务配置。
+6. 确认 mood_entries 的 RLS 已开启，使用两个测试账号核对云端数据权限；不要使用真实日记做权限测试。
+
+## 搜索说明
+
+搜索匹配正文、标签、心情名称及日期，例如 `工作`、`开心`、`2026-09-24`。忽略字母大小写和全角差异，空格分隔的词需同时匹配。搜索与心情筛选共同生效。
+
+这是关键词搜索，不是语义搜索。`好`不会自动匹配`开心`或`还不错`，除非记录正文或标签确实有该字。
+
+无结果时，先清空搜索并选择“全部心情”，查看“本机共 N 条记录”。若为 0，检查是否换了浏览器或域名、云同步是否成功；若有记录，从正文复制一个确定存在的词测试。更新后应强制刷新以载入新版 app.js。
+
+## 收不到登录邮件
+
+新版在登录弹窗内持续显示请求状态和服务错误，不再仅显示弹窗外的短暂提示。
+
+| 提示 | 排查方式 |
+| --- | --- |
+| 组件未加载 | 检查网络是否能访问 jsDelivr，刷新网页 |
+| 邮箱未授权 | 默认发送服务的收件人限制；配置自定义 SMTP 或用项目团队邮箱测试 |
+| 429 / 发送受限 | 等待限制解除，核查 Auth 日志和发送额度，避免连续重发 |
+| 请求已接受但没收到 | 检查垃圾邮件、Supabase Auth 日志、SMTP 服务商投递与退信日志 |
+| 请求超时 | 结果未确认，先检查邮箱，避免重复提交 |
+| 链接跳转错误 | 检查 Site URL 和 Redirect URLs，包含 GitHub 仓库路径 |
+
+前端不能保证邮件投递。SMTP 凭证只填写在 Supabase 控制台，不要提交到 GitHub。
+
+官方参考：[SMTP 配置](https://supabase.com/docs/guides/auth/auth-smtp)、[邮件排查](https://supabase.com/docs/guides/troubleshooting/not-receiving-auth-emails-from-the-supabase-project-OFSNzw)。
+
+## 许可
+
+本项目尚未指定开源许可证。公开可访问不等同于授予任意使用或再分发许可，维护者可另行添加 LICENSE。
 
 ## 本次完成
 - 本机草稿即时保存及刷新恢复；草稿不上传云端。
