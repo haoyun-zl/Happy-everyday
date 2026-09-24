@@ -38,11 +38,14 @@ function renderInsights(){const n=Number($('#period').value),start=new Date();st
 function renderCare(){const latest=sorted()[0];let title='从一分钟的暂停开始',text='尝试一次自然呼吸，听一点柔和的声音，或起身舒展。选择你愿意做的就好。';if(latest){if(latest.mood<=1){title='今天可能不太轻松，先减少一点负担';text='可以先试一分钟呼吸，接着听低音量音景；如果愿意，再到安全的地方慢走几分钟。'}else if(latest.mood>=3){title='把这份轻盈，留得更久一点';text='记下一件让你开心的小事，或用五分钟散步感受身体，让愉快有一个具体的落点。'}else{title='让平静，有一个小小的延续';text='选一段舒缓音景，闭目片刻或轻柔舒展，留意当下身体的感觉。'}if(latest.tags.includes('睡眠'))text+=' 你提到了睡眠，今晚可以给自己留一段远离屏幕的放松时间。';else if(latest.tags.includes('工作')||latest.tags.includes('学业'))text+=' 你提到了工作或学业，可以先暂时离开任务与屏幕。'}$('#recommendTitle').textContent=title;$('#recommendText').textContent=text}
 function stopBreath(){clearInterval(breathInterval);breathInterval=null;$('#breathOrb').classList.remove('inhale');$('#breathText').textContent='准备好了';$('#breathTimer').textContent='60 秒 · 给注意力一个落点';$('#breathe').textContent='开始呼吸练习'}
 function startBreath(){stopBreath();let elapsed=0;const tick=()=>{const phase=elapsed%10;$('#breathText').textContent=phase<4?'轻轻吸气':'缓慢呼气';$('#breathOrb').classList.toggle('inhale',phase<4);$('#breathTimer').textContent=`剩余 ${60-elapsed} 秒 · 吸气 4 秒 / 呼气 6 秒`};tick();$('#breathe').textContent='结束练习';breathInterval=setInterval(()=>{elapsed++;if(elapsed>=60){stopBreath();toast('练习完成。回到自己的自然呼吸。')}else tick()},1000)}$('#breathe').onclick=()=>breathInterval?stopBreath():startBreath();
-function stopSound(){clearTimeout(audioStop);toneNodes.forEach(n=>{try{n.stop()}catch{}});toneNodes=[];if(audioCtx){audioCtx.close();audioCtx=null}$('#sound').textContent='播放音景'}
+let analyser=null,waveFrame=null;
+function stopWave(){cancelAnimationFrame(waveFrame);waveFrame=null;analyser=null;$$('.sound-lines i').forEach(bar=>bar.style.height='4px')}
+function startWave(){const data=new Uint8Array(analyser.fftSize);const draw=()=>{if(!analyser||!audioCtx)return;analyser.getByteTimeDomainData(data);const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;$$('.sound-lines i').forEach((bar,i)=>{let energy=0;const size=Math.floor(data.length/19);for(let j=i*size;j<(i+1)*size;j++)energy+=Math.pow((data[j]-128)/128,2);bar.style.height=(reduced?4:4+Math.min(38,Math.sqrt(energy/size)*1300))+'px'});waveFrame=requestAnimationFrame(draw)};draw()}
+function stopSound(){stopWave();clearTimeout(audioStop);toneNodes.forEach(n=>{try{n.stop()}catch{}});toneNodes=[];if(audioCtx){audioCtx.close();audioCtx=null}$('#sound').textContent='播放音景'}
 async function startSound(){
 try{
-audioCtx=new (window.AudioContext||window.webkitAudioContext)();await audioCtx.resume();
-gain=audioCtx.createGain();gain.gain.value=Number($('#volume').value)/100*.12;gain.connect(audioCtx.destination);
+audioCtx=new (window.AudioContext||window.webkitAudioContext)();const startingContext=audioCtx;await startingContext.resume();if(audioCtx!==startingContext)return;
+gain=audioCtx.createGain();gain.gain.value=Number($('#volume').value)/100*.12;analyser=audioCtx.createAnalyser();analyser.fftSize=1024;gain.connect(analyser);analyser.connect(audioCtx.destination);
 const startNode=node=>{node.start();toneNodes.push(node);return node};
 const noise=(color='white',seconds=4)=>{const buffer=audioCtx.createBuffer(1,audioCtx.sampleRate*seconds,audioCtx.sampleRate),data=buffer.getChannelData(0);let last=0;for(let i=0;i<data.length;i++){const white=Math.random()*2-1;if(color==='brown'){last=(last+.02*white)/1.02;data[i]=last*3.2}else data[i]=white}const source=audioCtx.createBufferSource();source.buffer=buffer;source.loop=true;return source};
 const filteredNoise=(color,type,freq,level=.6,q=.7)=>{const source=noise(color),filter=audioCtx.createBiquadFilter(),local=audioCtx.createGain();filter.type=type;filter.frequency.value=freq;filter.Q.value=q;local.gain.value=level;source.connect(filter);filter.connect(local);local.connect(gain);startNode(source);return local};
@@ -57,7 +60,7 @@ case 'stream':{const water=filteredNoise('white','bandpass',1450,.48,.65);modula
 case 'bowl':tone(196,.46);tone(392,.17,'sine',4);tone(588,.07,'sine',-5);tone(784,.035,'sine',7);break;
 default:[130.81,164.81,196,261.63].forEach((f,i)=>tone(f,[.24,.2,.18,.12][i]));
 }
-$('#sound').textContent='暂停音景';audioStop=setTimeout(stopSound,600000)
+$('#sound').textContent='暂停音景';startWave();audioStop=setTimeout(stopSound,600000)
 }catch{stopSound();toast('此浏览器暂不支持音频播放，请换用新版浏览器。')}}
 $('#sound').onclick=()=>audioCtx?stopSound():startSound();$('#volume').oninput=e=>{if(gain&&audioCtx)gain.gain.setTargetAtTime(Number(e.target.value)/100*.12,audioCtx.currentTime,.1)};$('#soundType').onchange=()=>{if(audioCtx){stopSound();startSound()}};
 function stopMove(){clearInterval(moveInterval);moveInterval=null;$('#move').textContent='开始 5 分钟活动';$('#moveStatus').textContent='按舒适程度完成，不追求强度；疼痛时停止。'}$('#move').onclick=()=>{if(moveInterval){stopMove();return}let remaining=300;function tick(){$('#move').textContent=`结束活动 · ${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`;$('#moveStatus').textContent=remaining>240?'现在：轻轻活动肩部，放松肩颈。':remaining>60?'现在：在安全平坦的地方慢走。':'现在：在舒适范围内伸展身体。'}tick();moveInterval=setInterval(()=>{remaining--;if(remaining<=0){stopMove();toast('活动完成，感受一下现在的身体吧。')}else tick()},1000)};
@@ -136,22 +139,18 @@ function selectFilter(value){$('#historyFilter').value=value;$$('[data-filter]')
 $$('[data-filter]').forEach(b=>b.onclick=()=>selectFilter(b.dataset.filter));
 const searchLabel=$('#historySearch').closest('label');searchLabel.classList.add('search-field');historyToolbar.append(searchLabel);
 const clear=document.createElement('button');clear.type='button';clear.className='secondary';clear.textContent='清除条件';clear.onclick=()=>{$('#historySearch').value='';selectFilter('all')};historyToolbar.append(clear);
-const sounds=[['chord','舒缓和弦','柔和持续音'],['rain','绵绵雨声','细密背景声'],['ocean','缓慢海浪','缓慢起伏'],['forest','森林微风','轻柔风声'],['fire','温暖篝火','低沉沙沙声'],['stream','清浅溪流','明亮流动声'],['bowl','冥想音钵','持续共鸣音']];
-const soundLabel=$('#soundType').closest('label');soundLabel.hidden=true;
-soundLabel.insertAdjacentHTML('afterend','<div class="sound-picker"><span class="control-label">选择声音 · 合成音景</span><div id="soundChoices" role="group" aria-label="选择声音"></div><p id="selectedSound" class="muted" role="status">已选择：舒缓和弦</p></div>');
-$('#soundChoices').innerHTML=sounds.map(([value,title,detail])=>`<button type="button" data-sound="${value}" aria-pressed="${value==='chord'}"><strong>${title}</strong><small>${detail}</small></button>`).join('');
-$$('[data-sound]').forEach(b=>b.onclick=()=>{$('#soundType').value=b.dataset.sound;$$('[data-sound]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));$('#selectedSound').textContent='已选择：'+sounds.find(s=>s[0]===b.dataset.sound)[1];$('#soundType').dispatchEvent(new Event('change'))});
-$('footer span:first-child').textContent='心晴 · v2026.09.24-r6';
+$('.sound-lines').innerHTML=Array.from({length:19},()=>'<i></i>').join('');
+$('footer span:first-child').textContent='心晴 · v2026.09.24-r7';
 const baseInsights=renderInsights;
 renderInsights=function(){baseInsights();const start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-Number($('#period').value)+1);const list=entries.filter(e=>new Date(e.date)>=start&&new Date(e.date)<=new Date());const days=new Set(list.map(e=>dayKey(e.date))).size;$('#insightOverview').innerHTML=`<div><strong>${list.length}</strong><span>心情记录</span></div><div><strong>${days}</strong><span>有记录的日子</span></div><div><strong>${list.length?(list.reduce((sum,e)=>sum+MOODS[e.mood].score,0)/list.length).toFixed(1):'—'}</strong><span>平均心情（非健康评分）</span></div>`;if(days<3)$('#analysis').textContent=`目前只有 ${days} 个有记录的日子，样本较少，仅展示统计，不作稳定规律判断。无需为了图表而记录，按自己的节奏就好。`};
 $('#historyFilter').onchange=()=>renderHistory();
 $('#period').onchange=()=>renderInsights();
 render();
 const cloudConfig=document.createElement('script');
-cloudConfig.src='config.js?v=20260924-r6';
+cloudConfig.src='config.js?v=20260924-r7';
 cloudConfig.onload=()=>{
   const cloudClient=document.createElement('script');
-  cloudClient.src='cloud-sync.js?v=20260924-r6';
+  cloudClient.src='cloud-sync.js?v=20260924-r7';
   document.body.appendChild(cloudClient);
 };
 document.body.appendChild(cloudConfig);
