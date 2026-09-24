@@ -24,7 +24,15 @@ $$('nav button').forEach(b=>b.onclick=()=>show(b.dataset.view));window.addEventL
 $('#historyFilter').insertAdjacentHTML('beforeend',MOODS.map((m,i)=>`<option value="${i}">${m.name}</option>`).join(''));$('#historyFilter').onchange=renderHistory;$('#period').onchange=renderInsights;
 function render(){const days=new Set(entries.map(e=>dayKey(e.date))).size;$('#daysCount').textContent=days;$('#entriesCount').textContent=entries.length;$('#lastEntry').textContent=entries.length?`最近记录：${new Date(sorted()[0].date).toLocaleDateString('zh-CN')} · 每一次记录都算数。`:'从第一篇日记开始认识自己。';renderHistory();renderInsights();renderCare()}
 function empty(title,text){return `<div class="empty"><strong>${title}</strong><p>${text}</p></div>`}
-function renderHistory(){let list=sorted().filter(e=>$('#historyFilter').value==='all'||e.mood===Number($('#historyFilter').value));$('#historyList').innerHTML=list.length?list.map(e=>`<article class="card history-entry"><div class="entry-top"><div><div class="entry-mood">${MOODS[e.mood].face} ${MOODS[e.mood].name}</div><span class="muted">${new Date(e.date).toLocaleString('zh-CN',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})} · 强度 ${e.intensity}/10</span></div><button class="delete" data-delete="${escape(e.id)}" aria-label="删除这条${MOODS[e.mood].name}记录">删除</button></div><p class="entry-note">${escape(e.note||'这次没有写文字，心情也被好好记录了。')}</p><div class="entry-meta">${e.tags.map(t=>`<span class="entry-tag">${t}</span>`).join('')}</div></article>`).join(''):empty('这里，等着你的心情故事',entries.length?'这个筛选下还没有记录，试试选择全部心情。':'写下第一篇日记后，就能在这里回看。');$$('[data-delete]').forEach(b=>b.onclick=()=>{pendingDelete=b.dataset.delete;$('#deleteDialog').showModal()})}
+function renderHistory(){
+  const query=$('#historySearch')?.value||'';
+  const filter=$('#historyFilter').value;
+  const list=sorted().filter(e=>(filter==='all'||e.mood===Number(filter))&&matchesSearch(e,query));
+  $('#historyList').innerHTML=list.length?list.map(e=>`<article class="card history-entry"><div class="entry-top"><div><div class="entry-mood">${MOODS[e.mood].face} ${MOODS[e.mood].name}</div><span class="muted">${new Date(e.date).toLocaleString('zh-CN')} · 强度 ${e.intensity}/10</span></div><div class="entry-actions"><button type="button" class="delete" data-edit="${escape(e.id)}">编辑</button><button type="button" class="delete" data-delete="${escape(e.id)}">删除</button></div></div><p class="entry-note">${escape(e.note||'这次没有写文字，心情也被好好记录了。')}</p><div class="entry-meta">${e.tags.map(t=>`<span class="entry-tag">${escape(t)}</span>`).join('')}</div></article>`).join(''):empty(entries.length?'没有符合当前条件的记录':'本机还没有已保存的日记',entries.length?'试试清除搜索与筛选，或输入日记中的原文。':'草稿不属于历史记录。请先保存一条日记；其他设备的记录需要登录并同步。');
+  if($('#historyResults'))$('#historyResults').textContent=`找到 ${list.length} 条 · 本机共 ${entries.length} 条 · 正文 / 标签 / 心情 / 日期`;
+  $$('[data-delete]').forEach(b=>b.onclick=()=>{pendingDelete=b.dataset.delete;$('#deleteDialog').showModal()});
+  $$('[data-edit]').forEach(b=>b.onclick=()=>{if(($('#note').value||mood!==null)&&!confirm('当前草稿将被替换，继续编辑这条记录吗？'))return;editingId=b.dataset.edit;fillEditor(entries.find(e=>e.id===editingId));saveDraft();show('journal');$('#note').focus()});
+}
 $('#cancelDelete').onclick=()=>$('#deleteDialog').close();$('#confirmDelete').onclick=()=>{if(persist(entries.filter(e=>e.id!==pendingDelete))){$('#deleteDialog').close();toast('记录已删除。')}};
 function renderInsights(){const n=Number($('#period').value),start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-n+1);const data=entries.filter(e=>new Date(e.date)>=start&&new Date(e.date)<=new Date());const days={};data.forEach(e=>(days[dayKey(e.date)]??=[]).push(MOODS[e.mood].score));const keys=Object.keys(days).sort();if(!keys.length){$('#chart').innerHTML=empty('还没有这一时段的记录','保存心情后，趋势会在这里慢慢连成线。')}else{const points=keys.map(k=>({day:k,value:days[k].reduce((a,b)=>a+b,0)/days[k].length}));const x=i=>points.length===1?280:48+i*472/(points.length-1),y=v=>205-(v-1)*40;$('#chart').innerHTML=`<svg class="chart" viewBox="0 0 560 255" role="img" aria-label="${escape(points.map(p=>p.day+'，平均心情分数'+p.value.toFixed(1)).join('；'))}">${[1,2,3,4,5].map(v=>`<line x1="45" x2="530" y1="${y(v)}" y2="${y(v)}" stroke="#e8eef2"/><text x="18" y="${y(v)+4}">${v}</text>`).join('')}<polyline points="${points.map((p,i)=>`${x(i)},${y(p.value)}`).join(' ')}" fill="none" stroke="#5895c2" stroke-width="3" stroke-linejoin="round"/>${points.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.value)}" r="5" fill="#fff" stroke="#5895c2" stroke-width="3"><title>${p.day}：${p.value.toFixed(1)}</title></circle>${(i===0||i===points.length-1||i%Math.ceil(points.length/5)===0)?`<text text-anchor="middle" x="${x(i)}" y="235">${p.day.slice(5).replace('-','/')}</text>`:''}`).join('')}</svg><p class="muted">共 ${data.length} 条记录 / ${keys.length} 个有记录的日子；无记录日期略过。</p>`}const counts=TAGS.map(t=>({tag:t,total:data.filter(e=>e.tags.includes(t)).length,low:data.filter(e=>e.tags.includes(t)&&e.mood<=1).length})).filter(t=>t.total).sort((a,b)=>b.total-a.total);$('#triggerChart').innerHTML=counts.length?counts.map(t=>`<div class="bar-row"><div class="bar-label"><span>${t.tag}</span><span>${t.total} 次</span></div><div class="bar-track"><div class="bar-fill" style="width:${t.total/data.length*100}%"></div></div></div>`).join(''):empty('还没有触发因素','记录心情时选几个标签，便于回看。');const low=counts.filter(t=>t.low).sort((a,b)=>b.low-a.low)[0];$('#analysis').textContent=!data.length?'从一条真实的记录开始，不必急着寻找规律。':`这段时间你记录了 ${data.length} 次心情，分布在 ${keys.length} 天。${counts.length?`「${counts[0].tag}」出现最多，共 ${counts[0].total} 次。`:'还没有选择触发因素，可以在下一次记录时添加。'}${low?`在「${low.tag}」的 ${low.total} 条记录中，有 ${low.low} 条是低落或有点烦。可以留意当时发生的具体事情，以及你真正需要的支持。`:'也可以回看心情舒展的日子，记住那些让你舒服的小事。'}${data.length<3?'目前记录较少，暂不推断稳定规律。':''}`}
 function renderCare(){const latest=sorted()[0];let title='从一分钟的暂停开始',text='尝试一次自然呼吸，听一点柔和的声音，或起身舒展。选择你愿意做的就好。';if(latest){if(latest.mood<=1){title='今天可能不太轻松，先减少一点负担';text='可以先试一分钟呼吸，接着听低音量音景；如果愿意，再到安全的地方慢走几分钟。'}else if(latest.mood>=3){title='把这份轻盈，留得更久一点';text='记下一件让你开心的小事，或用五分钟散步感受身体，让愉快有一个具体的落点。'}else{title='让平静，有一个小小的延续';text='选一段舒缓音景，闭目片刻或轻柔舒展，留意当下身体的感觉。'}if(latest.tags.includes('睡眠'))text+=' 你提到了睡眠，今晚可以给自己留一段远离屏幕的放松时间。';else if(latest.tags.includes('工作')||latest.tags.includes('学业'))text+=' 你提到了工作或学业，可以先暂时离开任务与屏幕。'}$('#recommendTitle').textContent=title;$('#recommendText').textContent=text}
@@ -109,19 +117,41 @@ $('#diary').onsubmit=e=>{
   const entry={id:editingId||crypto.randomUUID(),date:date.toISOString(),updatedAt:new Date().toISOString(),mood,intensity:Number($('#intensity').value),tags:[...selected],note:$('#note').value.trim()};
   if(persist(editingId?entries.map(e=>e.id===editingId?entry:e):[...entries,entry])){editingId=null;fillEditor({});try{localStorage.removeItem(DRAFT_KEY)}catch{}$('#draftStatus').textContent='已保存到本机。你可以回看记录，或去自我关怀休息片刻。';toast('记录已保存在本机；云端状态请查看右上角。')}
 };
-const baseHistory=renderHistory;
-renderHistory=function(){baseHistory();const query=($('#historySearch').value||'').trim().toLowerCase();$$('#historyList article').forEach(article=>{const id=article.querySelector('[data-delete]').dataset.delete;const entry=entries.find(e=>e.id===id);article.hidden=!!query&&!`${entry.note} ${entry.tags.join(' ')}`.toLowerCase().includes(query);const button=document.createElement('button');button.type='button';button.className='delete';button.textContent='编辑';button.onclick=()=>{if(($('#note').value||mood!==null)&&!confirm('当前草稿将被替换，继续编辑这条记录吗？'))return;editingId=id;fillEditor(entry);saveDraft();show('journal');$('#note').focus()};article.querySelector('.entry-top').append(button)});if(query&&!$$('#historyList article').some(a=>!a.hidden))$('#historyList').insertAdjacentHTML('beforeend',empty('没有匹配的记录','试试其他关键词，或清空搜索。'))};
-$('#historySearch').oninput=renderHistory;
+function matchesSearch(entry, query){
+  const normalize=value=>String(value).normalize('NFKC').toLocaleLowerCase().replace(/\s+/g,' ').trim();
+  const text=normalize([entry.note, ...entry.tags, MOODS[entry.mood].name,dayKey(entry.date),new Date(entry.date).toLocaleDateString('zh-CN')].join(' '));
+  return normalize(query).split(' ').filter(Boolean).every(word=>text.includes(word));
+}
+$('#historySearch').placeholder='正文、标签、心情或日期';
+$('#historyList').insertAdjacentHTML('beforebegin','<p id="historyResults" class="muted" role="status"></p>');
+$('#historySearch').oninput=()=>renderHistory();
+$('#historySearch').addEventListener('search',()=>renderHistory());
+// Compact filters and sound tiles retain the underlying values and handlers.
+const historyToolbar=$('#history .toolbar');
+historyToolbar.classList.add('history-toolbar');
+const filterLabel=$('#historyFilter').closest('label');filterLabel.hidden=true;
+historyToolbar.insertAdjacentHTML('afterbegin','<div class="filter-field"><span class="control-label">筛选心情</span><div id="moodFilters" class="choice-chips" role="group" aria-label="筛选心情"></div></div>');
+$('#moodFilters').innerHTML=[{value:'all',label:'全部'},...MOODS.map((m,i)=>({value:String(i),label:m.name}))].map(o=>`<button type="button" data-filter="${o.value}" aria-pressed="${o.value==='all'}">${o.label}</button>`).join('');
+function selectFilter(value){$('#historyFilter').value=value;$$('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===value)));renderHistory()}
+$$('[data-filter]').forEach(b=>b.onclick=()=>selectFilter(b.dataset.filter));
+const searchLabel=$('#historySearch').closest('label');searchLabel.classList.add('search-field');historyToolbar.append(searchLabel);
+const clear=document.createElement('button');clear.type='button';clear.className='secondary';clear.textContent='清除条件';clear.onclick=()=>{$('#historySearch').value='';selectFilter('all')};historyToolbar.append(clear);
+const sounds=[['chord','舒缓和弦','柔和持续音'],['rain','绵绵雨声','细密背景声'],['ocean','缓慢海浪','缓慢起伏'],['forest','森林微风','轻柔风声'],['fire','温暖篝火','低沉沙沙声'],['stream','清浅溪流','明亮流动声'],['bowl','冥想音钵','持续共鸣音']];
+const soundLabel=$('#soundType').closest('label');soundLabel.hidden=true;
+soundLabel.insertAdjacentHTML('afterend','<div class="sound-picker"><span class="control-label">选择声音 · 合成音景</span><div id="soundChoices" role="group" aria-label="选择声音"></div><p id="selectedSound" class="muted" role="status">已选择：舒缓和弦</p></div>');
+$('#soundChoices').innerHTML=sounds.map(([value,title,detail])=>`<button type="button" data-sound="${value}" aria-pressed="${value==='chord'}"><strong>${title}</strong><small>${detail}</small></button>`).join('');
+$$('[data-sound]').forEach(b=>b.onclick=()=>{$('#soundType').value=b.dataset.sound;$$('[data-sound]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));$('#selectedSound').textContent='已选择：'+sounds.find(s=>s[0]===b.dataset.sound)[1];$('#soundType').dispatchEvent(new Event('change'))});
+$('footer span:first-child').textContent='心晴 · v2026.09.24-r6';
 const baseInsights=renderInsights;
 renderInsights=function(){baseInsights();const start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-Number($('#period').value)+1);const list=entries.filter(e=>new Date(e.date)>=start&&new Date(e.date)<=new Date());const days=new Set(list.map(e=>dayKey(e.date))).size;$('#insightOverview').innerHTML=`<div><strong>${list.length}</strong><span>心情记录</span></div><div><strong>${days}</strong><span>有记录的日子</span></div><div><strong>${list.length?(list.reduce((sum,e)=>sum+MOODS[e.mood].score,0)/list.length).toFixed(1):'—'}</strong><span>平均心情（非健康评分）</span></div>`;if(days<3)$('#analysis').textContent=`目前只有 ${days} 个有记录的日子，样本较少，仅展示统计，不作稳定规律判断。无需为了图表而记录，按自己的节奏就好。`};
 $('#historyFilter').onchange=()=>renderHistory();
 $('#period').onchange=()=>renderInsights();
 render();
 const cloudConfig=document.createElement('script');
-cloudConfig.src='config.js';
+cloudConfig.src='config.js?v=20260924-r6';
 cloudConfig.onload=()=>{
   const cloudClient=document.createElement('script');
-  cloudClient.src='cloud-sync.js';
+  cloudClient.src='cloud-sync.js?v=20260924-r6';
   document.body.appendChild(cloudClient);
 };
 document.body.appendChild(cloudConfig);

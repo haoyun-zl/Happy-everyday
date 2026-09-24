@@ -194,10 +194,12 @@
   $("#syncNow").addEventListener("click", syncAll);
   $("#logoutButton").addEventListener("click", async () => { await client.auth.signOut(); setSignedOut(); dialog.close(); });
 
+  $('#loginForm').insertAdjacentHTML('afterend','<p id="loginStatus" role="status" aria-live="polite" style="overflow-wrap:anywhere"></p>');
+  function loginStatus(text){$('#loginStatus').textContent=text}
   $("#loginForm").addEventListener("submit", async event => {
     event.preventDefault();
     if (!configured || !client) {
-      $("#setupHint").hidden = false;
+      loginStatus(!configured?'云同步配置未完成，请检查项目地址与公开密钥。':'登录组件尚未加载成功，请刷新网页；若持续失败，请检查网络能否访问登录服务。');
       return;
     }
     const button = $("#sendLogin");
@@ -205,11 +207,22 @@
     button.textContent = "正在发送…";
     const email = $("#loginEmail").value.trim();
     const redirectTo = `${location.origin}${location.pathname}`;
-    const {error} = await client.auth.signInWithOtp({email, options:{emailRedirectTo:redirectTo}});
-    button.disabled = false;
-    button.textContent = "发送登录链接";
-    if (error) app.notify("登录链接发送失败，请检查邮箱后重试。");
-    else app.notify("登录链接已发送，请前往邮箱完成登录。");
+    loginStatus('正在向邮件服务提交请求…');
+    let timer;
+    try {
+      const {error}=await Promise.race([client.auth.signInWithOtp({email,options:{emailRedirectTo:redirectTo}}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('请求超过 20 秒，结果未确认。请先检查邮箱，避免连续重发。')),20000)})]);
+      if(error)throw error;
+      loginStatus('邮件服务已接受请求。请检查收件箱及垃圾邮件；这不代表邮件已送达。');
+    } catch(error) {
+      const code=String(error.code||'');const message=String(error.message||'网络请求失败');
+      let hint='请检查 Supabase Auth 日志与邮件配置。';
+      if(/email_address_not_authorized|not authorized/i.test(code+' '+message))hint='当前邮箱不在默认邮件服务允许范围内。站点管理员需配置自定义 SMTP，或用项目团队成员邮箱测试。';
+      else if(error.status===429||/rate.limit|over_email_send_rate_limit/i.test(code+' '+message))hint='发送次数受限，请稍后重试；不要连续点击。';
+      else if(/fetch|network/i.test(message))hint='无法连接登录服务，请检查网络与项目地址。';
+      loginStatus(`发送未确认：${hint} 服务提示：${message}${code?'（'+code+'）':''}`);
+    } finally {
+      clearTimeout(timer);button.disabled=false;button.textContent='发送登录链接';
+    }
   });
 
   async function start() {
@@ -229,7 +242,7 @@
         else setSignedOut();
       });
     };
-    loader.onerror = () => app.notify("登录组件加载失败，游客记录仍会保存在本机。");
+    loader.onerror = () => loginStatus('登录组件加载失败，请检查网络后刷新；游客记录仍保存在本机。');
     document.head.appendChild(loader);
   }
 
