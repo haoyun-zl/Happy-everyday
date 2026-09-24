@@ -22,7 +22,8 @@
 @media(max-width:640px){.account-dialog{width:calc(100vw - 24px);padding:38px 24px 30px}.account-dialog h2{font-size:25px}.account-dialog input[type=email]{min-height:50px}}
 
 /* Header account action: participates in layout instead of covering the date. */
-.header-actions{display:flex;align-items:center;justify-content:flex-end;gap:16px;min-width:0;margin-left:auto}
+.insight-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:22px 0}.insight-overview>div{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:20px}.insight-overview strong{display:block;font:30px Georgia,serif;color:var(--blue)}.insight-overview span{font-size:12px;color:var(--muted)}#historySearch{display:block;max-width:100%;padding:10px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--ink)}.support-note{margin-top:28px;border-top:1px solid var(--line);padding:20px 0;color:var(--muted);font-size:13px}.support-note summary{cursor:pointer}#draftStatus{margin:0 0 20px}#cancelEdit{margin-bottom:20px}main>header{height:auto;min-height:90px;gap:18px;flex-wrap:wrap;padding:14px 0}@media(max-width:640px){.insight-overview{gap:8px}.insight-overview>div{padding:12px}.insight-overview strong{font-size:24px}main>header{min-height:53px}.entry-top{flex-wrap:wrap}}
+.header-actions{display:flex;align-items:center;justify-content:flex-end;gap:16px;min-width:0;margin-left:auto;flex-wrap:wrap}
 .header-actions #today{display:block;white-space:nowrap}
 .header-actions .account-button{position:static;inset:auto;flex:0 0 auto;white-space:nowrap;margin:0;padding:7px 15px}
 @media(max-width:640px){

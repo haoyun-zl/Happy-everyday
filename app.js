@@ -80,6 +80,43 @@ persist=function(next){
   if(saved) window.dispatchEvent(new CustomEvent('xinqing:local-change',{detail:{previous,next}}));
   return saved;
 };
+// Product iteration: recoverable writing, editable history and honest insights.
+const DRAFT_KEY='xinqing.draft.v1';
+let editingId=null;
+$('#diary').insertAdjacentHTML('afterbegin','<p id="draftStatus" class="muted" role="status">只选心情也可以保存；文字和标签均为选填。</p><button id="cancelEdit" type="button" class="secondary" hidden>取消编辑</button>');
+$('#history .toolbar').insertAdjacentHTML('beforeend','<label>搜索记录<input id="historySearch" type="search" placeholder="搜索文字或标签" maxlength="100"></label>');
+$('#insights .toolbar').insertAdjacentHTML('afterend','<div id="insightOverview" class="insight-overview"></div>');
+$('#care .page-heading').insertAdjacentHTML('beforeend','<p class="muted">建议来自所选心情与标签的规则匹配，不是 AI 诊断。合成音景为环境声音的抽象模拟，并非实地录音。</p>');
+$('footer').insertAdjacentHTML('beforebegin','<details class="support-note"><summary>隐私、数据保存与需要更多支持时</summary><p>游客记录和草稿保存在此浏览器，清除浏览器数据可能导致丢失。登录后的同步以实际同步状态为准，不承诺永久保存；建议定期在历史记录中导出备份。本版本未提供端到端加密，共用设备请谨慎使用。</p><p>这里不提供诊断、治疗或紧急救援。如正面临即时危险，请联系当地紧急服务，并联系身边可信任的人获取即时支持。持续困扰可以向合格的专业人员求助。</p></details>');
+function fillEditor(item){
+  mood=item.mood??null;selected=new Set(item.tags||[]);
+  $('#note').value=item.note||'';$('#entryDate').value=item.date?localDate(new Date(item.date)):localDate();
+  $('#intensity').value=item.intensity||5;$('#intensityLabel').textContent=`${$('#intensity').value} / 10`;
+  $('#count').textContent=`${$('#note').value.length} / 3000`;
+  $$('[data-mood]').forEach(b=>{const active=Number(b.dataset.mood)===mood;b.classList.toggle('selected',active);b.setAttribute('aria-pressed',String(active))});
+  $$('#triggers .tag').forEach(b=>{const active=selected.has(b.textContent);b.classList.toggle('selected',active);b.setAttribute('aria-pressed',String(active))});
+  $('#cancelEdit').hidden=!editingId;$('#diary button[type=submit]').textContent=editingId?'保存修改':'保存这份心情 ↗';
+}
+function saveDraft(){try{localStorage.setItem(DRAFT_KEY,JSON.stringify({id:'draft',editingId,date:new Date($('#entryDate').value).toISOString(),mood,intensity:Number($('#intensity').value),tags:[...selected],note:$('#note').value}));$('#draftStatus').textContent='草稿已保存在此浏览器（不上传云端）'}catch{$('#draftStatus').textContent='草稿未保存，请勿关闭页面，并尽快保存记录。'}}
+$('#diary').addEventListener('input',saveDraft);
+$('#diary').addEventListener('click',e=>{if(e.target.closest('[data-mood],.tag'))saveDraft()});
+try{const draft=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null');if(draft&&valid({...draft,mood:draft.mood??2})){editingId=entries.some(e=>e.id===draft.editingId)?draft.editingId:null;fillEditor(draft);$('#draftStatus').textContent='已恢复上次未完成的草稿。'}}catch{}
+$('#cancelEdit').onclick=()=>{editingId=null;fillEditor({});saveDraft()};
+$('#diary').onsubmit=e=>{
+  e.preventDefault();if(mood===null){toast('先选一个最接近此刻的心情吧。');$('[data-mood]').focus();return}
+  const date=new Date($('#entryDate').value);if(!Number.isFinite(+date)||date>new Date()){toast('请选择有效且不晚于现在的时间。');return}
+  if(editingId&&!entries.some(e=>e.id===editingId)){toast('原记录已不存在，请取消编辑后另存。');return}
+  const entry={id:editingId||crypto.randomUUID(),date:date.toISOString(),updatedAt:new Date().toISOString(),mood,intensity:Number($('#intensity').value),tags:[...selected],note:$('#note').value.trim()};
+  if(persist(editingId?entries.map(e=>e.id===editingId?entry:e):[...entries,entry])){editingId=null;fillEditor({});try{localStorage.removeItem(DRAFT_KEY)}catch{}$('#draftStatus').textContent='已保存到本机。你可以回看记录，或去自我关怀休息片刻。';toast('记录已保存在本机；云端状态请查看右上角。')}
+};
+const baseHistory=renderHistory;
+renderHistory=function(){baseHistory();const query=($('#historySearch').value||'').trim().toLowerCase();$$('#historyList article').forEach(article=>{const id=article.querySelector('[data-delete]').dataset.delete;const entry=entries.find(e=>e.id===id);article.hidden=!!query&&!`${entry.note} ${entry.tags.join(' ')}`.toLowerCase().includes(query);const button=document.createElement('button');button.type='button';button.className='delete';button.textContent='编辑';button.onclick=()=>{if(($('#note').value||mood!==null)&&!confirm('当前草稿将被替换，继续编辑这条记录吗？'))return;editingId=id;fillEditor(entry);saveDraft();show('journal');$('#note').focus()};article.querySelector('.entry-top').append(button)});if(query&&!$$('#historyList article').some(a=>!a.hidden))$('#historyList').insertAdjacentHTML('beforeend',empty('没有匹配的记录','试试其他关键词，或清空搜索。'))};
+$('#historySearch').oninput=renderHistory;
+const baseInsights=renderInsights;
+renderInsights=function(){baseInsights();const start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-Number($('#period').value)+1);const list=entries.filter(e=>new Date(e.date)>=start&&new Date(e.date)<=new Date());const days=new Set(list.map(e=>dayKey(e.date))).size;$('#insightOverview').innerHTML=`<div><strong>${list.length}</strong><span>心情记录</span></div><div><strong>${days}</strong><span>有记录的日子</span></div><div><strong>${list.length?(list.reduce((sum,e)=>sum+MOODS[e.mood].score,0)/list.length).toFixed(1):'—'}</strong><span>平均心情（非健康评分）</span></div>`;if(days<3)$('#analysis').textContent=`目前只有 ${days} 个有记录的日子，样本较少，仅展示统计，不作稳定规律判断。无需为了图表而记录，按自己的节奏就好。`};
+$('#historyFilter').onchange=()=>renderHistory();
+$('#period').onchange=()=>renderInsights();
+render();
 const cloudConfig=document.createElement('script');
 cloudConfig.src='config.js';
 cloudConfig.onload=()=>{

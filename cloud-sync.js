@@ -19,7 +19,7 @@
       <button id="closeAccount" class="dialog-close" type="button" aria-label="关闭">×</button>
       <div id="signedOutPanel">
         <span class="eyebrow">PERMANENTLY YOURS</span>
-        <h2>永久保存你的心情</h2>
+        <h2>备份心情，跨设备继续</h2>
         <p>不登录也可以继续记录。登录后，已有游客记录会合并到你的个人云端空间。</p>
         <form id="loginForm">
           <label for="loginEmail">邮箱地址</label>
@@ -62,21 +62,31 @@
     signedIn.hidden = true;
     accountButton.textContent = "登录同步";
     accountButton.classList.remove("is-synced");
+    accountButton.dataset.state = 'local';
+    updateStorageCopy('游客模式 · 记录保存在此浏览器，请定期导出备份');
   }
 
   function setSignedIn(nextSession) {
     session = nextSession;
     signedOut.hidden = true;
     signedIn.hidden = false;
-    accountButton.textContent = "已云端同步";
-    accountButton.classList.add("is-synced");
+    accountButton.textContent = "已登录 · 待同步";
+    accountButton.classList.remove("is-synced");
+    updateStorageCopy('已登录 · 云端同步尚待确认，本机记录保留');
     $("#accountEmail").textContent = nextSession.user.email || "已登录";
   }
 
   function setSyncStatus(text, ok) {
     $("#accountSyncState").textContent = text;
     accountButton.dataset.state = ok ? "ok" : "busy";
+    accountButton.textContent = ok ? '已云端同步' : '同步状态';
+    accountButton.classList.toggle('is-synced',ok);
+    updateStorageCopy(ok ? '本机与云端已同步 · 建议定期导出备份' : text);
     if (ok) $("#lastSynced").textContent = `最近同步：${new Date().toLocaleTimeString("zh-CN", {hour:"2-digit",minute:"2-digit"})}`;
+  }
+
+  function updateStorageCopy(text) {
+    document.querySelectorAll('.aside-bottom p, footer span:last-child, .form-bottom > span').forEach(node => node.textContent=text);
   }
 
   function toRow(entry) {
@@ -186,7 +196,7 @@
 
   $("#loginForm").addEventListener("submit", async event => {
     event.preventDefault();
-    if (!configured) {
+    if (!configured || !client) {
       $("#setupHint").hidden = false;
       return;
     }
